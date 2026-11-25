@@ -1,0 +1,11 @@
+*.FCBak
+ref/
+/misc-components
+/test1/
+.proposal
+
+__pycache__/
+*.py[cod]
+
+*.egg-info/
+.agents/mcp_config.json

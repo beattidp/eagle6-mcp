@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from eagle6_mcp.analyzers.schematic_analyzer import SchematicAnalyzer
 from eagle6_mcp.models.board import Board
 from eagle6_mcp.models.schematic import Schematic
+
+# EAGLE appends @1, @2, ... to duplicate embedded package names in a schematic.
+_EMBEDDED_PKG_SUFFIX_RE = re.compile(r"@\d+$")
 
 
 class ConsistencyAnalyzer:
@@ -50,7 +54,9 @@ class ConsistencyAnalyzer:
                 value_mismatches.append(
                     {"part": name, "schematic_value": s_val, "board_value": b_val}
                 )
-            if s_pkg and b_pkg and s_pkg != b_pkg:
+            s_pkg_norm = _EMBEDDED_PKG_SUFFIX_RE.sub("", s_pkg)
+            b_pkg_norm = _EMBEDDED_PKG_SUFFIX_RE.sub("", b_pkg)
+            if s_pkg_norm and b_pkg_norm and s_pkg_norm != b_pkg_norm:
                 package_mismatches.append(
                     {"part": name, "schematic_package": s_pkg, "board_package": b_pkg}
                 )

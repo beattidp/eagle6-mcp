@@ -56,6 +56,7 @@ class EagleConfig:
             "EAGLE6_PROJECT_DIRS",
             [
                 Path("/home/beattidp/eagle6/projects"),
+                Path("/home/beattidp/hdw"),
                 Path("/home/beattidp/vm_shared/hdw/Midnight"),
                 Path("/home/beattidp/eagle/projects"),
             ],

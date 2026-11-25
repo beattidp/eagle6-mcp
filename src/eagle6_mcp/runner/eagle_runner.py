@@ -104,6 +104,16 @@ class EagleRunner:
         digest = hashlib.sha1(str(path.resolve()).encode("utf-8")).hexdigest()
         return digest[:8]
 
+    @staticmethod
+    def _staged_filename(src: Path) -> str:
+        """Normalize file extension to lowercase for EAGLE 6 Linux case-sensitivity.
+
+        Legacy projects originating on Windows often carry uppercase extensions
+        (``.SCH``, ``.BRD``, ``.LBR``). EAGLE 6.6.0 on Linux requires lowercase
+        extensions to auto-select the schematic/board/library editor.
+        """
+        return f"{src.stem}{src.suffix.lower()}"
+
     def render_schematic(
         self,
         sch_path: str | Path,
@@ -129,7 +139,7 @@ class EagleRunner:
             out_path.unlink()
 
         with tempfile.TemporaryDirectory(dir=self.config.staging_root) as tmp:
-            staged = Path(tmp) / src.name
+            staged = Path(tmp) / self._staged_filename(src)
             shutil.copy2(src, staged)
             eagle_cmd = (
                 f"SET CONFIRM YES; EDIT .s{sheet}; WINDOW FIT; "
@@ -176,7 +186,7 @@ class EagleRunner:
 
         layer_str = " ".join(str(layer) for layer in layers)
         with tempfile.TemporaryDirectory(dir=self.config.staging_root) as tmp:
-            staged = Path(tmp) / src.name
+            staged = Path(tmp) / self._staged_filename(src)
             shutil.copy2(src, staged)
             eagle_cmd = (
                 f"SET CONFIRM YES; DISPLAY NONE {layer_str}; WINDOW FIT; "
@@ -204,7 +214,7 @@ class EagleRunner:
 
         out_dir = self.config.staging_root / "converted" / self._short_hash(src)
         out_dir.mkdir(parents=True, exist_ok=True)
-        staged = out_dir / src.name
+        staged = out_dir / self._staged_filename(src)
         shutil.copy2(src, staged)
 
         # SET CONFIRM YES automatically confirms EAGLE's v5->v6 XML conversion prompt.

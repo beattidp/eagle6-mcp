@@ -45,10 +45,29 @@ class SchematicAnalyzer:
         return part.library.lower().startswith("supply") or part.name.startswith("FRAME")
 
     def effective_value(self, part: Part) -> str:
-        """Compute display value (explicit value or deviceset fallback)."""
-        if part.value is not None and part.value != "":
+        """Compute EAGLE's effective display value for a schematic part.
+
+        EAGLE 6 value resolution rules when ``<part value=...>`` is omitted:
+        - If ``uservalue="yes"`` on the deviceset, the default value is empty (``""``).
+        - Otherwise, ``*`` in the deviceset name is replaced by ``part.technology``
+          and ``?`` is replaced by ``part.device`` (or ``part.device`` is appended
+          when no ``?`` placeholder is present).
+        """
+        if part.value is not None:
             return part.value
-        return part.deviceset
+        ds, _ = self.resolve_device(part)
+        if ds is not None and ds.uservalue:
+            return ""
+        val = part.deviceset
+        tech = "" if part.technology in {"", "''"} else part.technology
+        dev = "" if part.device in {"", "''"} else part.device
+        if "*" in val:
+            val = val.replace("*", tech)
+        if "?" in val:
+            val = val.replace("?", dev)
+        elif dev:
+            val = f"{val}{dev}"
+        return val
 
     def build_bom(self, grouped: bool = True, include_non_bom: bool = False) -> list[dict[str, Any]]:
         """Build a Bill of Materials from schematic parts.

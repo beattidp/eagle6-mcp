@@ -237,7 +237,7 @@ SAMPLE_BRD_XML = """<?xml version="1.0" encoding="utf-8"?>
     </designrules>
     <elements>
       <element name="R1" library="testlib" package="0805" value="10k" x="10" y="15" rot="R90"/>
-      <element name="R2" library="testlib" package="0805" value="R-0805" x="20" y="15" rot="MR0"/>
+      <element name="R2" library="testlib" package="0805" value="" x="20" y="15" rot="MR0"/>
       <element name="U1" library="testlib" package="DIP8" value="MCU" x="35" y="15" rot="R0"/>
     </elements>
     <signals>

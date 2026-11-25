@@ -95,3 +95,69 @@ def test_project_discoverer(sample_project_dir: Path) -> None:
     assert by_name["demo"].sch_format.value == "xml"
     assert by_name["demo"].brd_format.value == "xml"
     assert by_name["old_v5"].sch_format.value == "legacy_binary"
+
+
+def test_effective_value_wildcard_and_package_suffix_regressions() -> None:
+    """Regression test for EAGLE * technology/device value expansion and @N pkg suffixes."""
+    from eagle6_mcp.models import Board, BoardElement, Device, DeviceSet, Library, Part, Schematic
+    from eagle6_mcp.runner import EagleRunner
+
+    lib = Library(
+        name="logic",
+        devicesets={
+            "74*1G04": DeviceSet(
+                name="74*1G04",
+                uservalue=False,
+                devices=[Device(name="DBV", package="SOT23-5@1")],
+            ),
+            "TP": DeviceSet(
+                name="TP",
+                uservalue=True,
+                devices=[Device(name="", package="TP10R")],
+            ),
+        },
+    )
+    sch = Schematic(
+        file_path="/tmp/reg.sch",
+        eagle_version="6.6.0",
+        libraries={"logic": lib},
+        parts={
+            "IC1": Part(
+                name="IC1",
+                library="logic",
+                deviceset="74*1G04",
+                device="DBV",
+                technology="LVC",
+                value=None,
+            ),
+            "TP1": Part(
+                name="TP1",
+                library="logic",
+                deviceset="TP",
+                device="",
+                value=None,
+            ),
+        },
+    )
+    brd = Board(
+        file_path="/tmp/reg.brd",
+        eagle_version="6.6.0",
+        elements={
+            "IC1": BoardElement(
+                name="IC1", library="logic", package="SOT23-5", value="74LVC1G04DBV", x_mm=0, y_mm=0
+            ),
+            "TP1": BoardElement(
+                name="TP1", library="logic", package="TP10R", value="", x_mm=5, y_mm=0
+            ),
+        },
+    )
+
+    sa = SchematicAnalyzer(sch)
+    assert sa.effective_value(sch.parts["IC1"]) == "74LVC1G04DBV"
+    assert sa.effective_value(sch.parts["TP1"]) == ""
+
+    cons = ConsistencyAnalyzer(sch, brd).check()
+    assert cons["consistent"] is True
+    assert cons["value_mismatches"] == []
+    assert cons["package_mismatches"] == []
+    assert EagleRunner._staged_filename(Path("/tmp/DIY6502.SCH")) == "DIY6502.sch"

@@ -16,8 +16,8 @@ from eagle6_mcp.runner import EagleRunner
 from eagle6_mcp.scripts import ScriptBuilder, ScriptValidator
 from eagle6_mcp.server import create_server
 
-PRPP_SCH = Path("/home/beattidp/eagle6/projects/PRPP-controller/prpp-mcu.sch")
-PRPP_BRD = Path("/home/beattidp/eagle6/projects/PRPP-controller/prpp-mcu.brd")
+PRPP_SCH = Path.home() / "eagle6" / "projects" / "PRPP-controller" / "prpp-mcu.sch"
+PRPP_BRD = Path.home() / "eagle6" / "projects" / "PRPP-controller" / "prpp-mcu.brd"
 
 
 def test_mcp_server_registers_phase2_tools() -> None:

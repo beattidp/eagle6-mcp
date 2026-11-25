@@ -15,8 +15,9 @@ from eagle6_mcp.runner import EagleRunner
 from eagle6_mcp.server import create_server
 
 
-PRPP_SCH = Path("/home/beattidp/eagle6/projects/PRPP-controller/prpp-mcu.sch")
-PRPP_BRD = Path("/home/beattidp/eagle6/projects/PRPP-controller/prpp-mcu.brd")
+PRPP_SCH = Path.home() / "eagle6" / "projects" / "PRPP-controller" / "prpp-mcu.sch"
+PRPP_BRD = Path.home() / "eagle6" / "projects" / "PRPP-controller" / "prpp-mcu.brd"
+LEGACY_V5_DIR = Path.home() / "eagle" / "projects"
 
 
 def test_mcp_server_registers_phase1_tools() -> None:
@@ -81,17 +82,17 @@ def test_live_xvfb_render_schematic_and_board() -> None:
 
 
 @pytest.mark.skipif(
-    not (Path("/home/beattidp/eagle/projects").is_dir() and DEFAULT_CONFIG.eagle_bin.is_file()),
+    not (LEGACY_V5_DIR.is_dir() and DEFAULT_CONFIG.eagle_bin.is_file()),
     reason="Legacy EAGLE v5 projects directory not available",
 )
 def test_live_legacy_v5_detection_and_conversion() -> None:
-    v5_candidates = sorted(Path("/home/beattidp/eagle/projects").rglob("*.sch"))
+    v5_candidates = sorted(LEGACY_V5_DIR.rglob("*.sch"))
     legacy_file = next(
         (p for p in v5_candidates if FormatDetector.detect(p) == FileFormat.LEGACY_BINARY),
         None,
     )
     if legacy_file is None:
-        pytest.skip("No legacy binary .sch found in /home/beattidp/eagle/projects")
+        pytest.skip(f"No legacy binary .sch found in {LEGACY_V5_DIR}")
 
     runner = EagleRunner(DEFAULT_CONFIG)
     staged_xml = runner.convert_legacy_to_xml(legacy_file)

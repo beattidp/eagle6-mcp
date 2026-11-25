@@ -48,17 +48,16 @@ class EagleConfig:
     )
     user_dir: Path = field(
         default_factory=lambda: Path(
-            os.environ.get("EAGLE6_USER_DIR", "/home/beattidp/eagle6")
-        )
+            os.environ.get("EAGLE6_USER_DIR", str(Path.home() / "eagle6"))
+        ).expanduser()
     )
     project_dirs: list[Path] = field(
         default_factory=lambda: _split_env_paths(
             "EAGLE6_PROJECT_DIRS",
             [
-                Path("/home/beattidp/eagle6/projects"),
-                Path("/home/beattidp/hdw"),
-                Path("/home/beattidp/vm_shared/hdw/Midnight"),
-                Path("/home/beattidp/eagle/projects"),
+                Path.home() / "eagle6" / "projects",
+                Path.home() / "hdw",
+                Path.home() / "eagle" / "projects",
             ],
         )
     )
@@ -66,8 +65,8 @@ class EagleConfig:
         default_factory=lambda: _split_env_paths(
             "EAGLE6_LIBRARY_DIRS",
             [
-                Path("/home/beattidp/eagle6/lbr"),
-                Path("/home/beattidp/eagle/lbr"),
+                Path.home() / "eagle6" / "lbr",
+                Path.home() / "eagle" / "lbr",
                 Path("/opt/eagle-6.6.0/lbr"),
             ],
         )

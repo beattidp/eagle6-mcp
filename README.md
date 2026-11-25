@@ -21,7 +21,7 @@ An installable Python [Model Context Protocol (MCP)](https://modelcontextprotoco
 ## Installation
 
 ```bash
-git clone git@github.com:beattidp/eagle6-mcp.git
+git clone https://github.com/beattidp/eagle6-mcp.git
 cd eagle6-mcp
 
 # Activate your virtualenv (pyenv auto-activates via .python-version)

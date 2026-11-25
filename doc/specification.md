@@ -2,8 +2,9 @@
 
 - **Package Name:** `eagle6-mcp`
 - **Version:** `0.2.0`
+- **Platform:** Linux (not tested or validated on Windows or macOS)
 - **Protocol:** Model Context Protocol (MCP) over `stdio` transport (`mcp>=2.3.0`)
-- **Target CAD Software:** CadSoft EAGLE v6.6.0 (XML DTD `/opt/eagle-6.6.0/doc/eagle.dtd`)
+- **Target CAD Software:** CadSoft EAGLE v6.6.0 for Linux (XML DTD `/opt/eagle-6.6.0/doc/eagle.dtd`)
 
 ---
 

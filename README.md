@@ -9,8 +9,11 @@ An installable Python [Model Context Protocol (MCP)](https://modelcontextprotoco
 - **Safe Assisted Editing:** Generates commented `.scr` scripts from typed operations, dry-runs them on staged paired `.sch` + `.brd` copies with before/after diffs and ERC/DRC deltas, and saves reviewed scripts for execution in the EAGLE GUI with full Undo support.
 - **Headless Manufacturing Exports:** CSV/Markdown BOMs, SMD/THT Pick-and-Place centroid CSVs, and headless `eagle -X` CAM processor runs (`2layer_gerber`, `4layer_gerber`, or custom layers).
 
-## Prerequisites
+## Prerequisites & Platform Support
 
+> **Platform Support:** This server is built and validated for **Linux** only. It has **not** been tested or validated on Windows or macOS. Layer 2 headless EAGLE operations depend on Linux X11 tooling (`xvfb-run`, `xwininfo`, and `libX11.so.6`).
+
+- **Linux** (tested on x86_64 Linux)
 - **CadSoft EAGLE v6.6.0** (default: `/opt/eagle-6.6.0/bin/eagle`)
 - **Python 3.11+** (tested on Python 3.13 in `pyenv` virtualenv `eagle6-mcp`)
 - **`xvfb` (`xvfb-run`)** and **`xwininfo`** (for headless PNG rendering, DRC overlays, legacy conversion, and `.scr` dry-runs; not required for pure XML analysis or `-X` CAM jobs)
@@ -36,11 +39,11 @@ Register `eagle6-mcp` globally in `~/.gemini/config/mcp_config.json` so it is av
 {
   "mcpServers": {
     "eagle6": {
-      "command": "/home/beattidp/.pyenv/versions/3.13.1/envs/eagle6-mcp/bin/eagle6-mcp",
+      "command": "/home/<username>/.pyenv/versions/3.13.1/envs/eagle6-mcp/bin/eagle6-mcp",
       "env": {
         "EAGLE6_BIN": "/opt/eagle-6.6.0/bin/eagle",
-        "EAGLE6_PROJECT_DIRS": "/home/beattidp/eagle6/projects:/home/beattidp/hdw:/home/beattidp/eagle/projects",
-        "EAGLE6_LIBRARY_DIRS": "/home/beattidp/eagle6/lbr:/home/beattidp/eagle/lbr:/opt/eagle-6.6.0/lbr"
+        "EAGLE6_PROJECT_DIRS": "/home/<username>/eagle6/projects:/home/<username>/hdw:/home/<username>/eagle/projects",
+        "EAGLE6_LIBRARY_DIRS": "/home/<username>/eagle6/lbr:/home/<username>/eagle/lbr:/opt/eagle-6.6.0/lbr"
       }
     }
   }
@@ -55,9 +58,9 @@ Then open **Additional Options (`...`) > MCP Servers** in Antigravity to verify 
 | :--- | :--- | :--- |
 | `EAGLE6_BIN` | `/opt/eagle-6.6.0/bin/eagle` | Path to EAGLE 6.6.0 executable |
 | `EAGLE6_INSTALL_DIR` | `/opt/eagle-6.6.0` | EAGLE installation root |
-| `EAGLE6_USER_DIR` | `/home/beattidp/eagle6` | User EAGLE data directory |
-| `EAGLE6_PROJECT_DIRS` | `/home/beattidp/eagle6/projects:/home/beattidp/hdw:...` | Colon-separated project search roots |
-| `EAGLE6_LIBRARY_DIRS` | `/home/beattidp/eagle6/lbr:/home/beattidp/eagle/lbr:/opt/eagle-6.6.0/lbr` | Colon-separated library search roots |
+| `EAGLE6_USER_DIR` | `/home/<username>/eagle6` | User EAGLE data directory |
+| `EAGLE6_PROJECT_DIRS` | `/home/<username>/eagle6/projects:/home/<username>/hdw:...` | Colon-separated project search roots |
+| `EAGLE6_LIBRARY_DIRS` | `/home/<username>/eagle6/lbr:/home/<username>/eagle/lbr:/opt/eagle-6.6.0/lbr` | Colon-separated library search roots |
 | `EAGLE6_RENDER_DIR` | `/tmp/eagle6-mcp-renders` | Output directory for exported PNGs |
 | `EAGLE6_STAGING_ROOT` | `/tmp/eagle6-mcp-staging` | Isolated temporary staging root |
 | `EAGLE6_XVFB_BIN` | `xvfb-run` | Path/name of `xvfb-run` |

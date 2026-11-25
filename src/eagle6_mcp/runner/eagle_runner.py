@@ -225,3 +225,185 @@ class EagleRunner:
                 f"stderr={res.stderr.strip()!r}"
             )
         return staged
+
+    def render_drc_overlay(
+        self,
+        brd_path: str | Path,
+        dru_path: str | Path | None = None,
+        dpi: int = 200,
+    ) -> Path:
+        """Run official EAGLE ``DRC;`` on a staged board and export its error-polygon PNG."""
+        src = Path(brd_path).expanduser().resolve()
+        if not src.is_file():
+            raise FileNotFoundError(f"Board file not found: {src}")
+        if not (50 <= dpi <= 1200):
+            raise ValueError("DPI must be between 50 and 1200.")
+
+        dru_cmd = ""
+        if dru_path:
+            dru = Path(dru_path).expanduser().resolve()
+            if not dru.is_file():
+                raise FileNotFoundError(f"DRU file not found: {dru}")
+            dru_cmd = f"DRC LOAD '{dru}'; "
+
+        out_name = f"{src.stem}_{self._short_hash(src)}_drc_overlay_{dpi}dpi.png"
+        out_path = self.config.render_dir / out_name
+        if out_path.exists():
+            out_path.unlink()
+
+        layers = " ".join(str(x) for x in BOARD_LAYER_PRESETS["all_copper"])
+        with tempfile.TemporaryDirectory(dir=self.config.staging_root) as tmp:
+            staged = Path(tmp) / self._staged_filename(src)
+            shutil.copy2(src, staged)
+            eagle_cmd = (
+                f"SET CONFIRM YES; {dru_cmd}DRC; DISPLAY NONE {layers}; "
+                f"WINDOW FIT; EXPORT IMAGE '{out_path}' {dpi}; QUIT"
+            )
+            res = self._run_editor_command(staged, eagle_cmd)
+
+        if not out_path.is_file() or out_path.stat().st_size == 0:
+            raise RuntimeError(
+                f"EAGLE failed to render DRC overlay for '{src}' (exit={res.returncode}). "
+                f"stderr={res.stderr.strip()!r}"
+            )
+        return out_path
+
+    def render_drc_region(
+        self,
+        brd_path: str | Path,
+        x_mm: float,
+        y_mm: float,
+        radius_mm: float = 5.0,
+        preset: str = "all_copper",
+        custom_layers: list[int] | None = None,
+        run_drc: bool = True,
+        dpi: int = 300,
+    ) -> Path:
+        """Render a zoomed-in PNG centered on ``(x_mm, y_mm)`` with optional DRC overlay."""
+        src = Path(brd_path).expanduser().resolve()
+        if not src.is_file():
+            raise FileNotFoundError(f"Board file not found: {src}")
+        if radius_mm <= 0:
+            raise ValueError("`radius_mm` must be > 0.")
+        if not (50 <= dpi <= 1200):
+            raise ValueError("DPI must be between 50 and 1200.")
+
+        if custom_layers:
+            layers = sorted({int(layer) for layer in custom_layers})
+        else:
+            preset_key = preset.lower().strip()
+            if preset_key not in BOARD_LAYER_PRESETS:
+                valid = ", ".join(sorted(BOARD_LAYER_PRESETS.keys()))
+                raise ValueError(f"Unknown preset '{preset}'. Valid presets: {valid}")
+            layers = BOARD_LAYER_PRESETS[preset_key]
+
+        x1, y1 = x_mm - radius_mm, y_mm - radius_mm
+        x2, y2 = x_mm + radius_mm, y_mm + radius_mm
+        out_name = (
+            f"{src.stem}_{self._short_hash(src)}_region_"
+            f"{x_mm:.1f}_{y_mm:.1f}_r{radius_mm:.1f}_{dpi}dpi.png"
+        )
+        out_path = self.config.render_dir / out_name
+        if out_path.exists():
+            out_path.unlink()
+
+        layer_str = " ".join(str(layer) for layer in layers)
+        drc_prefix = "DRC; " if run_drc else ""
+        with tempfile.TemporaryDirectory(dir=self.config.staging_root) as tmp:
+            staged = Path(tmp) / self._staged_filename(src)
+            shutil.copy2(src, staged)
+            eagle_cmd = (
+                f"SET CONFIRM YES; GRID MM; {drc_prefix}DISPLAY NONE {layer_str}; "
+                f"WINDOW ({x1:.3f} {y1:.3f}) ({x2:.3f} {y2:.3f}); "
+                f"EXPORT IMAGE '{out_path}' WINDOW {dpi}; QUIT"
+            )
+            res = self._run_editor_command(staged, eagle_cmd)
+
+        if not out_path.is_file() or out_path.stat().st_size == 0:
+            raise RuntimeError(
+                f"EAGLE failed to render region for '{src}' (exit={res.returncode}). "
+                f"stderr={res.stderr.strip()!r}"
+            )
+        return out_path
+
+    def run_cam_job(
+        self,
+        brd_path: str | Path,
+        output_dir: str | Path,
+        jobs: list[tuple[str, str, list[int]]],
+    ) -> dict[str, object]:
+        """Execute headless EAGLE CAM Processor (``eagle -X -N``) for a list of layer jobs.
+
+        Unlike ``-C``, EAGLE's ``-X`` CAM mode is completely headless and does
+        not require Xvfb or X11.
+
+        Args:
+            brd_path: Path to the source ``.brd`` file.
+            output_dir: Destination directory for generated Gerber/Excellon files.
+            jobs: List of ``(file_suffix, cam_device, layer_numbers)`` tuples.
+        """
+        if not self.config.eagle_bin.is_file():
+            raise FileNotFoundError(
+                f"EAGLE binary not found at '{self.config.eagle_bin}'."
+            )
+        src = Path(brd_path).expanduser().resolve()
+        if not src.is_file():
+            raise FileNotFoundError(f"Board file not found: {src}")
+
+        out_root = Path(output_dir).expanduser().resolve()
+        out_root.mkdir(parents=True, exist_ok=True)
+
+        generated: list[dict[str, object]] = []
+        warnings: list[str] = []
+
+        with tempfile.TemporaryDirectory(dir=self.config.staging_root) as tmp:
+            staged = Path(tmp) / self._staged_filename(src)
+            shutil.copy2(src, staged)
+
+            for suffix, device, layers in jobs:
+                out_file = out_root / f"{src.stem}{suffix}"
+                cmd = [
+                    str(self.config.eagle_bin),
+                    "-X",
+                    "-N",
+                    f"-d{device}",
+                    f"-o{out_file}",
+                    str(staged),
+                    *[str(layer) for layer in layers],
+                ]
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.config.cli_timeout_seconds,
+                    check=False,
+                )
+                if proc.returncode == 1:
+                    warnings.append(
+                        f"CAM warning on {out_file.name}: {proc.stderr.strip() or proc.stdout.strip()}"
+                    )
+                elif proc.returncode > 1:
+                    raise RuntimeError(
+                        f"CAM processor failed on {out_file.name} (exit={proc.returncode}): "
+                        f"{proc.stderr.strip() or proc.stdout.strip()}"
+                    )
+
+                generated.append(
+                    {
+                        "file": str(out_file),
+                        "name": out_file.name,
+                        "device": device,
+                        "layers": layers,
+                        "exists": out_file.is_file(),
+                        "size_bytes": out_file.stat().st_size if out_file.is_file() else 0,
+                        "exit_code": proc.returncode,
+                    }
+                )
+
+        return {
+            "board_path": str(src),
+            "output_dir": str(out_root),
+            "file_count": len(generated),
+            "warnings": warnings,
+            "files": generated,
+        }

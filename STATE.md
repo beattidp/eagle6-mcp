@@ -1,36 +1,33 @@
 # Project State & Session Handoff
-*Last Updated: 2026-11-24 20:14 MST (-07:00)*
+*Last Updated: 2026-11-24 23:06 MST (-07:00)*
 
 ## 🎯 Current Goal
-- Build the CadSoft EAGLE v6.6.0 MCP server (`eagle6-mcp`) in Python over `stdio` transport.
-- **Phase 1** (`v0.1.0-phase1`) is pushed to `origin` and hardened against 25 real-world designs imported into `/home/beattidp/hdw/`.
-- Ready to begin **Phase 2** (custom ULPs for official ERC/DRC JSON output, `.scr` edit script generation/validation, and headless `-X` CAM/manufacturing exports).
+- **Phase 1 (`v0.1.0-phase1`)** and **Phase 2 (`v0.2.0-phase2`)** of the CadSoft EAGLE v6.6.0 MCP server (`eagle6-mcp`) are complete and verified (`22/22` tests passing).
+- Ready to push `v0.2.0-phase2` to `origin`, wire `eagle6-mcp` into the user's MCP client config, and begin reviewing/assisting on actual EAGLE designs in `/home/beattidp/eagle6/projects/` and `/home/beattidp/hdw/`.
 
 ## ✅ Completed Recently
-- Created detailed Phase 1 & Phase 2 plan at `doc/plans/2026-11-24_eagle6-mcp-phase1-phase2-plan.md` and worklog at `doc/worklogs/2026-11-24_worklog.md` (commit `4610044`).
-- Installed dependencies (`mcp>=2.3.0`, `lxml>=6.1.3`, `pydantic>=2.14.4`, `pytest>=9.2.0`) in `pyenv` virtualenv `eagle6-mcp` (`.python-version`) and generated `requirements.txt` with `>=` constraints.
-- Implemented full Phase 1 package under `src/eagle6_mcp/` (17 MCP tools over `stdio` using `mcp.server.mcpserver.MCPServer`):
-  - `config.py` configured for `/opt/eagle-6.6.0/bin/eagle`, `/tmp/eagle6-mcp-renders`, `/home/beattidp/eagle6/`, `/home/beattidp/vm_shared/hdw/Midnight/`, and `/home/beattidp/eagle/`.
-  - `models/`, `parsers/` (XML + DRU + legacy v5 binary detector), `analyzers/` (discovery, schematic BOM/netlist/review, board summary/placement/routing/DRU, `.sch`↔`.brd` consistency, library inspection).
-  - `runner/` (`EagleRunner` + `_xvfb_focus_exec.py` using `libX11.so.6` to focus EAGLE 6's Qt4 editor window under bare `xvfb-run`, plus `SET CONFIRM YES;` for legacy v5→v6 XML conversion).
-- Verified 15/15 tests passing (`pytest -v` in 3.36s), including live `xvfb-run` PNG renders of `PRPP-controller` and live v5 binary→XML conversion.
-- Documented Phase 1 in `doc/features/01_phase1-xml-analysis-and-rendering.md`, committed (`c99a2f5`), and tagged `v0.1.0-phase1`.
+- **Phase 1 (`v0.1.0-phase1`)**: Read-only XML/DRU parsers, 5 engineering analyzers, headless `xvfb-run` PNG rendering (with `libX11` Qt4 focus helper), legacy v5 binary-to-XML conversion, and hardening across 25 real-world projects in `~/hdw/`.
+- **Phase 2 (`v0.2.0-phase2`)**:
+  - Structured ERC & DRC (`ErcDrcAnalyzer`) + official EAGLE `DRC;` error-polygon overlay and zoomed `render_drc_region`.
+  - Safe assisted editing: `ScriptBuilder` (`.scr` generation + pre-flight checks), `ScriptValidator` (staged paired `.sch`+`.brd` dry-run with before/after diff, consistency check, and ERC/DRC delta), and `save_edit_script`.
+  - Manufacturing exports: `export_bom` (CSV/Markdown), `export_pick_and_place` (mm/mil centroid CSV), and headless `run_cam_job` (`eagle -X` RS-274X Gerbers + Excellon drills).
+  - All 26 MCP tools registered in `src/eagle6_mcp/server.py`; `pytest -v` **22/22 passed in 5.80s**.
+  - Documented in `doc/features/02_phase2-erc-drc-scripts-and-cam.md` and `doc/worklogs/2026-11-24_worklog.md`.
 
 ## 🚧 In Progress / Blockers
 - No blockers or failing tests.
-- Waiting on user choice next session: test Phase 1 against existing projects (`PRPP-controller`, `Midnight`, or `/home/beattidp/eagle/projects/` v5 designs) and/or begin Phase 2 implementation.
-- Note: User's pre-existing repo setup files (`.agents/`, `.gitignore`, `.python-version`, `AGENTS.md`, `STATE.template.md`) remain untracked in git; do not blindly `git add -A` (`.agents/mcp_config.json` contains a local FreeCAD bearer token).
+- Pending user approval to push commits (`a25177f` + Phase 2 commit) and tag `v0.2.0-phase2` to `origin`.
 
 ## ⏭️ Exact Next Step
-1. Confirm with user whether to start **Phase 2** (`src/eagle6_mcp/ulp/` custom ERC/DRC ULPs + `src/eagle6_mcp/scripts/` `.scr` generator/validator + CAM exports) or run Phase 1 design reviews first.
-2. Run `pytest -v` to confirm environment health before making edits.
+1. Push `main` and `v0.2.0-phase2` to `origin` after user review.
+2. Optionally register `eagle6-mcp` (`stdio` using `/home/beattidp/.pyenv/versions/3.13.1/envs/eagle6-mcp/bin/python -m eagle6_mcp`) in MCP client configuration and start reviewing an unfinished design.
 
 ## 📂 Active Files (Do Not Scan Outside These First)
 - `doc/plans/2026-11-24_eagle6-mcp-phase1-phase2-plan.md`
-- `doc/features/01_phase1-xml-analysis-and-rendering.md`
-- `doc/worklogs/2026-11-24_worklog.md`
+- `doc/features/02_phase2-erc-drc-scripts-and-cam.md`
 - `src/eagle6_mcp/server.py`
-- `src/eagle6_mcp/config.py`
-- `src/eagle6_mcp/runner/eagle_runner.py`
-- `src/eagle6_mcp/runner/_xvfb_focus_exec.py`
-- `tests/test_server_and_runner.py`
+- `src/eagle6_mcp/analyzers/erc_drc_analyzer.py`
+- `src/eagle6_mcp/scripts/script_builder.py`
+- `src/eagle6_mcp/scripts/script_validator.py`
+- `src/eagle6_mcp/exports/manufacturing.py`
+- `tests/test_phase2.py`

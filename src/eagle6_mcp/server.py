@@ -15,11 +15,13 @@ from mcp.server.mcpserver import Image, MCPServer
 from eagle6_mcp.analyzers import (
     BoardAnalyzer,
     ConsistencyAnalyzer,
+    ErcDrcAnalyzer,
     LibraryAnalyzer,
     ProjectDiscoverer,
     SchematicAnalyzer,
 )
 from eagle6_mcp.config import DEFAULT_CONFIG, EagleConfig
+from eagle6_mcp.exports import CAM_PRESETS, ManufacturingExporter
 from eagle6_mcp.models.library import Library
 from eagle6_mcp.parsers import (
     BoardParser,
@@ -29,6 +31,7 @@ from eagle6_mcp.parsers import (
     SchematicParser,
 )
 from eagle6_mcp.runner import BOARD_LAYER_PRESETS, EagleRunner
+from eagle6_mcp.scripts import ScriptBuilder, ScriptValidator
 
 
 def _load_library_from_any(path: str | Path, library_name: str | None = None) -> Library:
@@ -69,13 +72,14 @@ def create_server(config: EagleConfig | None = None) -> MCPServer:
     cfg = config or DEFAULT_CONFIG
     discoverer = ProjectDiscoverer(cfg)
     runner = EagleRunner(cfg)
+    validator = ScriptValidator(cfg, runner=runner)
 
     mcp = MCPServer(
         name="eagle6-mcp",
         instructions=(
-            "Read-only analysis, static design review, and headless PNG rendering "
-            "for CadSoft EAGLE v6.6.0 schematics (.sch), boards (.brd), libraries (.lbr), "
-            "and design rules (.dru). Never modifies user design files."
+            "Analysis, static & official ERC/DRC review, headless PNG rendering, "
+            "validated .scr edit script generation, and headless CAM/BOM/centroid "
+            "exports for CadSoft EAGLE v6.6.0 designs. Never mutates user .sch/.brd files."
         ),
     )
 
@@ -330,6 +334,188 @@ def create_server(config: EagleConfig | None = None) -> MCPServer:
             "staged_xml_path": str(staged),
             "detected_format": detected.value,
         }
+
+    # ------------------------------------------------------------------
+    # 6. Phase 2: ERC / DRC & Zoomed DRC Region Rendering
+    # ------------------------------------------------------------------
+
+    @mcp.tool()
+    def run_erc(sch_path: str, include_board_consistency: bool = True) -> dict[str, Any]:
+        """Run structured Electrical Rule Check (ERC) on a schematic (and paired board).
+
+        Checks pin-direction conflicts (out-to-out, out-to-supply, undriven inputs),
+        unconnected pins, single-pin nets, missing values, unannotated parts, and
+        forward/back-annotation consistency when a sibling ``.brd`` exists.
+        """
+        p = Path(sch_path).expanduser().resolve()
+        sch = SchematicParser.parse_file(p)
+        brd = None
+        if include_board_consistency:
+            sibling = p.with_suffix(".brd")
+            if not sibling.is_file():
+                sibling = p.with_suffix(".BRD")
+            if sibling.is_file() and FormatDetector.detect(sibling).value == "xml":
+                brd = BoardParser.parse_file(sibling)
+        return ErcDrcAnalyzer.run_erc(sch, board=brd)
+
+    @mcp.tool()
+    def run_drc(
+        brd_path: str,
+        dru_path: str | None = None,
+        render_overlay: bool = False,
+        dpi: int = 200,
+    ) -> dict[str, Any]:
+        """Run structured Design Rule Check (DRC) on a board against embedded or external DRU.
+
+        Optionally also runs official EAGLE 6.6.0 ``DRC;`` on a staged copy and
+        saves an error-polygon overlay PNG under ``/tmp/eagle6-mcp-renders/``.
+        """
+        brd = BoardParser.parse_file(brd_path)
+        override_dru = DruParser.parse_file(dru_path) if dru_path else None
+        report = ErcDrcAnalyzer.run_drc(brd, override_dru=override_dru)
+        if render_overlay:
+            overlay_png = runner.render_drc_overlay(
+                brd_path=brd_path, dru_path=dru_path, dpi=dpi
+            )
+            report["drc_overlay_png"] = str(overlay_png)
+        return report
+
+    @mcp.tool()
+    def render_drc_region(
+        brd_path: str,
+        x_mm: float,
+        y_mm: float,
+        radius_mm: float = 5.0,
+        preset: str = "all_copper",
+        custom_layers: list[int] | None = None,
+        run_drc: bool = True,
+        dpi: int = 300,
+        include_image: bool = True,
+    ) -> list[Any]:
+        """Render a zoomed-in board PNG centered on ``(x_mm, y_mm)`` with optional DRC overlay."""
+        out_path = runner.render_drc_region(
+            brd_path=brd_path,
+            x_mm=x_mm,
+            y_mm=y_mm,
+            radius_mm=radius_mm,
+            preset=preset,
+            custom_layers=custom_layers,
+            run_drc=run_drc,
+            dpi=dpi,
+        )
+        meta = (
+            f"Rendered board region ({x_mm:.2f}, {y_mm:.2f}) mm +/- {radius_mm:.2f} mm "
+            f"(drc={run_drc}, {dpi} DPI) to {out_path}"
+        )
+        if include_image:
+            return [meta, Image(path=out_path)]
+        return [meta]
+
+    # ------------------------------------------------------------------
+    # 7. Phase 2: Safe Assisted Editing via EAGLE Scripts (.scr)
+    # ------------------------------------------------------------------
+
+    @mcp.tool()
+    def generate_edit_script(
+        target: str,
+        operations: list[dict[str, Any]],
+        project_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate a commented, safely-escaped EAGLE ``.scr`` edit script.
+
+        Supported ``op`` types: ``set_value``, ``rename_part``, ``set_attribute``,
+        ``delete_attribute``, ``add_part``, ``move_part``, ``rotate_part``,
+        ``mirror_part``, ``smash_part``, ``set_net_class``, ``change_width``,
+        ``raw_command``.
+        """
+        return ScriptBuilder.generate(
+            target=target, operations=operations, project_path=project_path
+        )
+
+    @mcp.tool()
+    def validate_edit_script(
+        project_path: str,
+        script_content: str,
+        run_checks: bool = True,
+    ) -> dict[str, Any]:
+        """Dry-run an EAGLE ``.scr`` script on an isolated staged copy of a project.
+
+        Stages both ``.sch`` and ``.brd`` (when paired), executes the script via
+        EAGLE 6.6.0 under ``xvfb-run``, and returns before/after diffs,
+        consistency results, and ERC/DRC deltas without touching user files.
+        """
+        return validator.validate(
+            project_path=project_path,
+            script_content=script_content,
+            run_checks=run_checks,
+        )
+
+    @mcp.tool()
+    def save_edit_script(script_content: str, output_path: str) -> dict[str, str]:
+        """Save a reviewed ``.scr`` script to disk and return the EAGLE GUI command."""
+        return ScriptValidator.save_script(
+            script_content=script_content, output_path=output_path
+        )
+
+    # ------------------------------------------------------------------
+    # 8. Phase 2: Manufacturing & Documentation Exports
+    # ------------------------------------------------------------------
+
+    @mcp.tool()
+    def export_bom(
+        sch_path: str,
+        format: str = "csv",
+        grouped: bool = True,
+        output_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Export a clean fabrication/purchasing BOM in ``csv`` or ``markdown`` format."""
+        sch = SchematicParser.parse_file(sch_path)
+        return ManufacturingExporter.export_bom(
+            schematic=sch, fmt=format, grouped=grouped, output_path=output_path
+        )
+
+    @mcp.tool()
+    def export_pick_and_place(
+        brd_path: str,
+        units: str = "mm",
+        side: str = "all",
+        smd_only: bool = False,
+        output_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Export an SMD/THT Pick-and-Place centroid CSV table from a ``.brd`` file."""
+        brd = BoardParser.parse_file(brd_path)
+        return ManufacturingExporter.export_pick_and_place(
+            board=brd,
+            units=units,
+            side=side,
+            smd_only=smd_only,
+            output_path=output_path,
+        )
+
+    @mcp.tool()
+    def run_cam_job(
+        brd_path: str,
+        output_dir: str,
+        preset: str = "2layer_gerber",
+        custom_jobs: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Run headless EAGLE CAM Processor (``eagle -X``) to generate Gerbers & Excellon drills.
+
+        Valid presets: ``2layer_gerber``, ``4layer_gerber``. Or pass ``custom_jobs``
+        as ``[{"suffix": ".GTL", "device": "GERBER_RS274X", "layers": [1, 17, 18]}]``.
+        """
+        if custom_jobs:
+            jobs = [
+                (str(j["suffix"]), str(j["device"]), [int(l) for l in j["layers"]])
+                for j in custom_jobs
+            ]
+        else:
+            key = preset.lower().strip()
+            if key not in CAM_PRESETS:
+                valid = ", ".join(sorted(CAM_PRESETS.keys()))
+                raise ValueError(f"Unknown CAM preset '{preset}'. Valid: {valid}")
+            jobs = CAM_PRESETS[key]
+        return runner.run_cam_job(brd_path=brd_path, output_dir=output_dir, jobs=jobs)
 
     return mcp
 

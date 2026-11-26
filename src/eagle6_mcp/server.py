@@ -437,17 +437,23 @@ def create_server(config: EagleConfig | None = None) -> MCPServer:
         project_path: str,
         script_content: str,
         run_checks: bool = True,
+        keep_staged: bool = False,
     ) -> dict[str, Any]:
         """Dry-run an EAGLE ``.scr`` script on an isolated staged copy of a project.
 
         Stages both ``.sch`` and ``.brd`` (when paired), executes the script via
         EAGLE 6.6.0 under ``xvfb-run``, and returns before/after diffs,
         consistency results, and ERC/DRC deltas without touching user files.
+
+        When ``keep_staged`` is ``True``, retains the isolated staging directory
+        under ``staging_root`` and returns ``staged_dir``, ``staged_brd_path``,
+        and ``staged_sch_path`` for downstream tools (e.g. ``eagle6-freerouting``).
         """
         return validator.validate(
             project_path=project_path,
             script_content=script_content,
             run_checks=run_checks,
+            keep_staged=keep_staged,
         )
 
     @mcp.tool()

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+import subprocess
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from eagle6_mcp.analyzers import ErcDrcAnalyzer
-from eagle6_mcp.config import DEFAULT_CONFIG
+from eagle6_mcp.config import DEFAULT_CONFIG, EagleConfig
 from eagle6_mcp.exports import CAM_PRESETS, ManufacturingExporter
 from eagle6_mcp.models import DesignRules
 from eagle6_mcp.parsers import BoardParser, SchematicParser
@@ -37,6 +40,50 @@ def test_mcp_server_registers_phase2_tools() -> None:
     }
     assert expected_phase2.issubset(names)
     assert len(names) >= 26
+    validate_tool = next(t for t in tools if t.name == "validate_edit_script")
+    props = validate_tool.input_schema.get("properties", {})
+    assert "keep_staged" in props
+    assert props["keep_staged"].get("default") is False
+
+
+def test_script_validator_keep_staged(sample_project_dir: Path, tmp_path: Path) -> None:
+    """Verify keep_staged=False cleans up staging_root and keep_staged=True retains staged files."""
+    staging_root = tmp_path / "staging"
+    cfg = EagleConfig(staging_root=staging_root)
+
+    fake_runner = MagicMock()
+    fake_runner._run_editor_command.return_value = subprocess.CompletedProcess(
+        args=["eagle"], returncode=0, stdout="", stderr=""
+    )
+    validator = ScriptValidator(cfg, runner=fake_runner)
+    brd_path = sample_project_dir / "demo.brd"
+
+    # Default keep_staged=False: paths are None and staging_root is left empty
+    res_ephemeral = validator.validate(brd_path, "RATSNEST;\n", run_checks=False)
+    assert res_ephemeral["success"] is True
+    assert res_ephemeral["paired_files_staged"] is True
+    assert res_ephemeral["staged_dir"] is None
+    assert res_ephemeral["staged_brd_path"] is None
+    assert res_ephemeral["staged_sch_path"] is None
+    assert list(staging_root.iterdir()) == []
+
+    # keep_staged=True: isolated dir under staging_root is retained with both .brd and .sch
+    res_kept = validator.validate(
+        brd_path, "RATSNEST;\n", run_checks=False, keep_staged=True
+    )
+    assert res_kept["success"] is True
+    assert res_kept["staged_dir"] is not None
+    assert res_kept["staged_brd_path"] is not None
+    assert res_kept["staged_sch_path"] is not None
+
+    staged_dir = Path(res_kept["staged_dir"])
+    staged_brd = Path(res_kept["staged_brd_path"])
+    staged_sch = Path(res_kept["staged_sch_path"])
+    assert staged_dir.parent == staging_root
+    assert staged_brd.is_file()
+    assert staged_sch.is_file()
+    assert staged_brd != brd_path
+    shutil.rmtree(staged_dir)
 
 
 def test_erc_and_drc_analyzers(sample_project_dir: Path) -> None:

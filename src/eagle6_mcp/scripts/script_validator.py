@@ -27,12 +27,23 @@ class ScriptValidator:
         project_path: str | Path,
         script_content: str,
         run_checks: bool = True,
+        keep_staged: bool = False,
     ) -> dict[str, Any]:
         """Execute ``script_content`` against a staged copy of ``project_path``.
 
         If a sibling ``.brd``/``.sch`` exists in the same folder, both are staged
         so EAGLE's forward/back-annotation executes exactly as it would in the
         user's GUI. Original user files are never modified.
+
+        Args:
+            project_path: Path to the target ``.sch`` or ``.brd`` file.
+            script_content: EAGLE ``.scr`` commands to execute on the staged copy.
+            run_checks: When ``True``, compute sch/brd consistency and ERC/DRC deltas.
+            keep_staged: When ``True``, preserve the isolated staging directory
+                under ``self.config.staging_root`` and return ``staged_dir``,
+                ``staged_brd_path``, and ``staged_sch_path`` so downstream tools
+                (such as ``eagle6-freerouting``) can inspect or route the staged
+                board without touching original user files.
         """
         target = Path(project_path).expanduser().resolve()
         if not target.is_file():
@@ -48,8 +59,10 @@ class ScriptValidator:
             alt_sibling = target.with_suffix(sibling_ext.upper())
             sibling = alt_sibling if alt_sibling.is_file() else None
 
-        with tempfile.TemporaryDirectory(dir=self.config.staging_root) as tmp:
-            tmp_dir = Path(tmp)
+        self.config.staging_root.mkdir(parents=True, exist_ok=True)
+        tmp_dir = Path(tempfile.mkdtemp(prefix="validate_", dir=self.config.staging_root))
+        keep_dir = False
+        try:
             staged_target = tmp_dir / EagleRunner._staged_filename(target)
             shutil.copy2(target, staged_target)
 
@@ -107,16 +120,28 @@ class ScriptValidator:
                         "warnings_after": a_drc["warning_count"],
                     }
 
-            return {
+            result = {
                 "success": res.returncode == 0,
                 "exit_code": res.returncode,
                 "stderr": res.stderr.strip(),
                 "paired_files_staged": staged_sibling is not None,
+                "staged_dir": str(tmp_dir) if keep_staged else None,
+                "staged_brd_path": (
+                    str(staged_brd) if (keep_staged and staged_brd is not None) else None
+                ),
+                "staged_sch_path": (
+                    str(staged_sch) if (keep_staged and staged_sch is not None) else None
+                ),
                 "diff": diff,
                 "consistency": consistency,
                 "erc_delta": erc_delta,
                 "drc_delta": drc_delta,
             }
+            keep_dir = keep_staged
+            return result
+        finally:
+            if not keep_dir:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @staticmethod
     def save_script(script_content: str, output_path: str | Path) -> dict[str, str]:

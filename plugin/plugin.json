@@ -1,0 +1,13 @@
+{
+  "name": "eagle6-mcp",
+  "displayName": "EAGLE v6 PCB & Schematic Assistant",
+  "version": "0.2.0",
+  "description": "Inspect, visually review, run ERC/DRC, safely generate validated .scr edit scripts, and export BOM/PnP/Gerbers for CadSoft EAGLE v6.6.0 designs on Linux.",
+  "logo": "assets/logo.svg",
+  "repository": "https://github.com/beattidp/eagle6-mcp",
+  "suggestedPrompts": [
+    "List my EAGLE projects and summarize the design in this folder",
+    "Run ERC and DRC on this board and render the top copper layer for visual review",
+    "Generate and dry-run a .scr edit script to update component values and attributes"
+  ]
+}

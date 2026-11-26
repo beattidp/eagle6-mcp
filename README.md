@@ -33,7 +33,28 @@ This installs the `eagle6-mcp` console entry point (and `python -m eagle6_mcp` m
 
 ## Quick Start with Antigravity
 
-Register `eagle6-mcp` globally in `~/.gemini/config/mcp_config.json` so it is available in **any** new hardware project folder:
+### Option A: Install as a Global Antigravity Plugin (Recommended)
+
+This repository includes a self-contained Antigravity plugin bundle in [`plugin/`](plugin/) (MCP server config, `eagle6-design-review` workflow skill, safety rules, and custom `assets/logo.svg` icon).
+
+With your `eagle6-mcp` virtualenv active, run:
+
+```bash
+python scripts/install_antigravity_plugin.py
+```
+
+This copies `plugin/` into `~/.gemini/config/plugins/eagle6-mcp/` and resolves `mcp_config.json` to your active virtualenv's `eagle6-mcp` binary and default EAGLE paths. *(Use `--dry-run` to preview.)*
+
+If `eagle6-mcp` is already on your global `PATH`, you can alternatively install directly via the Antigravity CLI:
+
+```bash
+agy plugin validate ./plugin
+agy plugin install ./plugin
+```
+
+### Option B: Manual MCP Server Registration
+
+Alternatively, register `eagle6-mcp` directly in `~/.gemini/config/mcp_config.json`:
 
 ```json
 {
@@ -50,7 +71,7 @@ Register `eagle6-mcp` globally in `~/.gemini/config/mcp_config.json` so it is av
 }
 ```
 
-Then open **Additional Options (`...`) > MCP Servers** in Antigravity to verify `eagle6` is connected with all **26 tools**.
+Then open **Additional Options (`...`) > MCP Servers** (or **Customizations > Plugins**) in Antigravity to verify `eagle6-mcp` is connected with all **26 tools**.
 
 ## Environment Variables
 

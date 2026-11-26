@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "eagle6-mcp": {
+      "command": "eagle6-mcp",
+      "env": {
+        "EAGLE6_BIN": "/opt/eagle-6.6.0/bin/eagle",
+        "EAGLE6_RENDER_DIR": "/tmp/eagle6-mcp-renders"
+      }
+    }
+  }
+}

@@ -102,7 +102,7 @@ src/eagle6_mcp/
 | Tool | Parameters | Returns |
 | :--- | :--- | :--- |
 | `generate_edit_script` | `target: "sch" \| "brd"`, `operations: list[dict]`, `project_path?: str` | Commented `.scr` text + pre-flight warnings |
-| `validate_edit_script` | `project_path: str`, `script_content: str`, `run_checks: bool = True` | Staged dry-run exit status, before/after schematic & board diffs, consistency check, ERC/DRC deltas |
+| `validate_edit_script` | `project_path: str`, `script_content: str`, `run_checks: bool = True`, `keep_staged: bool = False` | Staged dry-run exit status, before/after schematic & board diffs, consistency check, ERC/DRC deltas, and (when `keep_staged=True`) retained `staged_dir`, `staged_brd_path`, and `staged_sch_path` under `staging_root` |
 | `save_edit_script` | `script_content: str`, `output_path: str` | Written `.scr` path + exact `SCRIPT '<path>';` EAGLE GUI command |
 
 ### 4.8 Manufacturing & Documentation Exports

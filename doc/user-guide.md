@@ -92,6 +92,7 @@ If you create a new permanent hardware root folder and want `list_projects` (wit
 1. Describe the edits you want (e.g., *"Set R12 to 4.7k, add MPN attributes to the 0805 resistors, and check if anything breaks"*).
 2. The agent calls `generate_edit_script` to produce a commented `.scr` script with pre-flight checks.
 3. The agent calls `validate_edit_script` to dry-run the script on a staged copy of your `.sch` + `.brd`, showing you the exact before/after diff, consistency status, and ERC/DRC delta.
+   - For closed-loop workflows (such as chaining `eagle6-placer` → `eagle6-mcp` → `eagle6-freerouting` via `eagle6-workflow`), pass `keep_staged=True` to retain the isolated staged directory under `staging_root` and receive `staged_brd_path` / `staged_sch_path` for downstream routing or DRC without touching original files. You can also chain existing `.scr` files via `SCRIPT '<abs_path>';`.
 4. Once you approve, the agent calls `save_edit_script` to save e.g. `fixes.scr` in your project folder.
 5. Open your project in EAGLE 6 GUI (both `.sch` and `.brd` open) and type:
    ```text
